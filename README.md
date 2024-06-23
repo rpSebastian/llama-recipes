@@ -14,15 +14,18 @@ The 'llama-recipes' repository is a companion to the [Meta Llama 3](https://gith
 >
 > A multiturn-conversation with Meta Llama 3 follows this prompt template:
 > ```
-> <|begin_of_text|><|start_header_id|>system<|end_header_id|>
+> <|begin_of_text|>
 >
-> {{ system_prompt }}<|eot_id|><|start_header_id|>user<|end_header_id|>
+> <|start_header_id|>system<|end_header_id|>{{ system_prompt }}<|eot_id|>
 >
-> {{ user_message_1 }}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+> <|start_header_id|>user<|end_header_id|>{{ user_message_1 }}<|eot_id|>
 >
-> {{ model_answer_1 }}<|eot_id|><|start_header_id|>user<|end_header_id|>
+> <|start_header_id|>assistant<|end_header_id|>{{ model_answer_1 }}<|eot_id|>
 >
-> {{ user_message_2 }}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+> <|start_header_id|>user<|end_header_id|>{{ user_message_2 }}<|eot_id|>
+>
+> <|start_header_id|>assistant<|end_header_id|>
+> 
 > ```
 > Each message gets trailed by an `<|eot_id|>` token before a new header is started, signaling a role change.
 >
@@ -123,6 +126,18 @@ cd transformers
 pip install protobuf
 python src/transformers/models/llama/convert_llama_weights_to_hf.py \
    --input_dir /path/to/downloaded/llama/weights --model_size 7B --output_dir /output/path
+
+python src/transformers/models/llama/convert_llama_weights_to_hf.py \
+   --input_dir /home/xuhang/hf_hub/Meta-Llama-3-8B --model_size 8B --llama_version 3--output_dir /home/xuhang/hf_hub/Meta-Llama-3-8B-hf
+
+python src/transformers/models/llama/convert_llama_weights_to_hf.py \
+    --input_dir /home/xuhang/hf_hub/Meta-Llama-3-8B-Instruct --model_size 8B --llama_version 3 --output_dir /home/xuhang/hf_hub/Meta-Llama-3-8B-Instruct-hf
+
+python src/transformers/models/llama/convert_llama_weights_to_hf.py \
+    --input_dir /home/xuhang/hf_hub/llama-2-7b --model_size 7B --llama_version 2 --output_dir /home/xuhang/hf_hub/llama-2-7b-hf
+
+python src/transformers/models/llama/convert_llama_weights_to_hf.py \
+    --input_dir /home/xuhang/hf_hub/llama-2-7b-chat --model_size 7B --llama_version 2 --output_dir /home/xuhang/hf_hub/llama-2-7b-chat-hf
 ```
 
 

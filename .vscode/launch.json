@@ -1,0 +1,38 @@
+{
+    // 使用 IntelliSense 了解相关属性。 
+    // 悬停以查看现有属性的描述。
+    // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "multigpu",
+            "type": "debugpy",
+            "request": "launch",
+            "console": "integratedTerminal",
+            "module": "torch.distributed.run",
+            "justMyCode": true,
+            "args": [
+                "--nproc_per_node",
+                "8",
+                "recipes/finetuning/finetuning.py",
+                "--enable_fsdp",
+                "--model_name",
+                "/data1/xuhang/hf_hub/Meta-Llama-3-8B-hf",
+                "--use_peft",
+                "--peft_method lora",
+                "--dataset",
+                "samsum_dataset",
+                "--save_model",
+                "--dist_checkpoint_root_folder",
+                "model_checkpoints",
+                "--dist_checkpoint_folder",
+                "fine-tuned",
+                "--pure_bf16",
+                "--output_dir",
+                "/home/xuhang/LLM/models/llama-3-8B-peft",
+                "--batch_size_training",
+                "1"
+            ]
+        }
+    ]
+}

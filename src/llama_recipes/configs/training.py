@@ -31,7 +31,7 @@ class train_config:
     dataset = "samsum_dataset"
     peft_method: str = "lora" # None, llama_adapter (Caution: llama_adapter is currently not supported with FSDP)
     use_peft: bool=False  # 是否进行微调
-    from_peft_checkpoint: str="" # if not empty and use_peft=True, will load the peft checkpoint and resume the fine-tuning on that checkpoint
+    from_peft_checkpoint: str="" # 加载保存的微调参数 if not empty and use_peft=True, will load the peft checkpoint and resume the fine-tuning on that checkpoint
     output_dir: str = "PATH/to/save/PEFT/model"  # 保存微调模型参数的位置，以及训练的配置
     freeze_layers: bool = False  # 当不实用peft时，在训练中是否冻结前若干层
     num_freeze_layers: int = 1  # 冻结的层数

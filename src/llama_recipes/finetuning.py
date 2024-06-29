@@ -278,6 +278,7 @@ def main(**kwargs):
 
     # Initialize the optimizer and learning rate scheduler
     if fsdp_config.pure_bf16 and fsdp_config.optimizer == "anyprecision":
+        # 使用自己实现的AdamW优化器，寄存器状态使用bf16，并且支持kahan累加，在浮点数累加时减少误差
         optimizer = AnyPrecisionAdamW(
             model.parameters(),
             lr=train_config.lr,
@@ -292,6 +293,7 @@ def main(**kwargs):
             lr=train_config.lr,
             weight_decay=train_config.weight_decay,
         )
+    # 学习率每调用step_size次，衰减gamma
     scheduler = StepLR(optimizer, step_size=1, gamma=train_config.gamma)
 
     # Start the training process

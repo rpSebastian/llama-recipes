@@ -69,15 +69,19 @@ def setup_wandb(train_config, fsdp_config, **kwargs):
 
 def main(**kwargs):
     # Update the configuration for the training and sharding process
+    # 将命令行配置更新到配置文件中
     train_config, fsdp_config = TRAIN_CONFIG(), FSDP_CONFIG()
     update_config((train_config, fsdp_config), **kwargs)
+
     # Set the seeds for reproducibility
+    # 设置随机种子
     if is_xpu_available():
         torch.xpu.manual_seed(train_config.seed)
     torch.manual_seed(train_config.seed)
     random.seed(train_config.seed)
 
     if train_config.enable_fsdp:
+        # 初始化fsdp分布式运行，local_rank是当前进程在节点中的编号，rank是当前进程在集群中的编号，world_size是集群中进程的总数
         setup()
         # torchrun specific
         local_rank = int(os.environ["LOCAL_RANK"])
@@ -85,6 +89,7 @@ def main(**kwargs):
         world_size = int(os.environ["WORLD_SIZE"])
 
     if torch.distributed.is_initialized():
+        # 设置默认的GPU编号为local_rank
         if is_xpu_available():
             torch.xpu.set_device(local_rank)
         elif torch.cuda.is_available():
@@ -94,7 +99,9 @@ def main(**kwargs):
 
     wandb_run = None
 
+    # 配置wandb
     if train_config.use_wandb:
+        # 在分布式训练中，只有rank=0的进程会初始化wandb
         if not train_config.enable_fsdp or rank==0:
             wandb_run = setup_wandb(train_config, fsdp_config, **kwargs)
 
@@ -122,12 +129,13 @@ def main(**kwargs):
                 model = LlamaForCausalLM(llama_config)
 
     else:
+        # 读取与训练模型
         model = LlamaForCausalLM.from_pretrained(
             train_config.model_name,
-            load_in_8bit=True if train_config.quantization else None,
+            load_in_8bit=True if train_config.quantization else None,  # 是否量化到8bit模型
             device_map="auto" if train_config.quantization else None,
-            use_cache=use_cache,
-            attn_implementation="sdpa" if train_config.use_fast_kernels else None,
+            use_cache=use_cache,  # 是否使用KV-cache，在训练时不使用
+            attn_implementation="sdpa" if train_config.use_fast_kernels else None,  # 是否使用加速的attention实现
         )
 
     # Load the tokenizer and add special tokens
@@ -136,17 +144,21 @@ def main(**kwargs):
 
     # If there is a mismatch between tokenizer vocab size and embedding matrix,
     # throw a warning and then expand the embedding matrix
+    # tokenizer的词汇表数量和模型的嵌入矩阵大小不一致时，扩展模型的嵌入矩阵大小
     if len(tokenizer) > model.get_input_embeddings().weight.shape[0]:
         print("WARNING: Resizing the embedding matrix to match the tokenizer vocab size.")
         model.resize_token_embeddings(len(tokenizer))
 
+    # 打印模型名字和参数量
     print_model_size(model, train_config, rank if train_config.enable_fsdp else 0)
 
     # Prepare the model for int8 training if quantization is enabled
+    # 如果模型进行8bit量化训练
     if train_config.quantization:
         model = prepare_model_for_kbit_training(model)
 
     # Convert the model to bfloat16 if fsdp and pure_bf16 is enabled
+    # 将模型转化为bf16精度
     if train_config.enable_fsdp and fsdp_config.pure_bf16:
         model.to(torch.bfloat16)
 
@@ -157,6 +169,7 @@ def main(**kwargs):
             peft_config = model.peft_config()
         # Generate the peft config and start fine-tuning from original model
         else:
+            # 将模型转换为微调版本的模型
             peft_config = generate_peft_config(train_config, kwargs)
             model = get_peft_model(model, peft_config)
         if wandb_run:
@@ -171,9 +184,12 @@ def main(**kwargs):
     #setting up FSDP if enable_fsdp is enabled
     if train_config.enable_fsdp:
         if not train_config.use_peft and train_config.freeze_layers:
+            # 如果不实用peft训练，并且开启冻结，那么冻结模型的前若干层
             freeze_transformer_layers(model, train_config.num_freeze_layers)
 
+        # 默认的包裹策略是，包裹所有的decoder层
         mixed_precision_policy, wrapping_policy = get_policies(fsdp_config, rank)
+        # PEFT策略下，需要包裹所有的decoder层以及所有的非冻结层
         my_auto_wrapping_policy = fsdp_auto_wrap_policy(model, LlamaDecoderLayer)
 
         device_id = 0
@@ -184,28 +200,31 @@ def main(**kwargs):
 
         model = FSDP(
             model,
-            auto_wrap_policy= my_auto_wrapping_policy if train_config.use_peft else wrapping_policy,
-            cpu_offload=CPUOffload(offload_params=True) if fsdp_config.fsdp_cpu_offload else None,
-            mixed_precision=mixed_precision_policy if not fsdp_config.pure_bf16 else None,
-            sharding_strategy=fsdp_config.sharding_strategy,
-            device_mesh=hsdp_device_mesh_plan,
-            device_id=device_id,
-            limit_all_gathers=True,
-            sync_module_states=train_config.low_cpu_fsdp,
+            auto_wrap_policy= my_auto_wrapping_policy if train_config.use_peft else wrapping_policy,  # 设置分片的自动包裹策略
+            cpu_offload=CPUOffload(offload_params=True) if fsdp_config.fsdp_cpu_offload else None,  # 是否卸载到CPU
+            mixed_precision=mixed_precision_policy if not fsdp_config.pure_bf16 else None,  # 是否使用混合精度训练，bf16或者fp16
+            sharding_strategy=fsdp_config.sharding_strategy,  # 使用什么策略进行分片
+            device_mesh=hsdp_device_mesh_plan,  # 使用混合分片策略时，设置设备网格
+            device_id=device_id,  # 当前模型所在GPU的编号
+            limit_all_gathers=True,  # 如果设置为负数，将会发出较多的all-gather指令， 会造成更多的GPU内存负担
+            sync_module_states=train_config.low_cpu_fsdp,  # 设置为True时，将会把rank0的参数和缓冲区同步到其他GPU
             param_init_fn=(lambda module: module.to_empty(device=torch.device("cuda"), recurse=False))
             if train_config.low_cpu_fsdp and rank != 0 else None,
         )
         if fsdp_config.fsdp_activation_checkpointing:
+            # 对所有的decoder层缓存激活值
             apply_fsdp_checkpointing(model)
     elif not train_config.quantization and not train_config.enable_fsdp:
         if is_xpu_available():
             model.to("xpu:0")
         elif torch.cuda.is_available():
             model.to("cuda")
-
+    
+    # 获取数据集配置
     dataset_config = generate_dataset_config(train_config, kwargs)
 
      # Load and preprocess the dataset for training and validation
+     # 获取训练数据集，数据集中的数据加上了所需的prompt和开始结束标记，经过了分词处理，包含"input_ids"，"attention_mask"，和"labels"
     dataset_train = get_preprocessed_dataset(
         tokenizer,
         dataset_config,
@@ -215,6 +234,7 @@ def main(**kwargs):
     if not train_config.enable_fsdp or rank == 0:
         print(f"--> Training Set Length = {len(dataset_train)}")
 
+    # 获取测试数据集
     dataset_val = get_preprocessed_dataset(
         tokenizer,
         dataset_config,
@@ -224,8 +244,10 @@ def main(**kwargs):
         print(f"--> Validation Set Length = {len(dataset_val)}")
 
     if train_config.batching_strategy == "packing":
+        # 如果使用packing方式，将数据集中的数据连接起来，分割成上下文窗口长度
         dataset_train = ConcatDataset(dataset_train, chunk_size=train_config.context_length)
 
+    # 获取数据读取器配置
     train_dl_kwargs = get_dataloader_kwargs(train_config, dataset_train, tokenizer, "train")
 
     # Create DataLoaders for the training and validation dataset
@@ -238,7 +260,7 @@ def main(**kwargs):
 
     eval_dataloader = None
     if train_config.run_validation:
-        if train_config.batching_strategy == "packing":
+        if train_config.batching_strategy == "packing": 
             dataset_val = ConcatDataset(dataset_val, chunk_size=train_config.context_length)
 
         val_dl_kwargs = get_dataloader_kwargs(train_config, dataset_val, tokenizer, "val")
@@ -246,7 +268,7 @@ def main(**kwargs):
         eval_dataloader = torch.utils.data.DataLoader(
             dataset_val,
             num_workers=train_config.num_workers_dataloader,
-            pin_memory=True,
+            pin_memory=True,  # 自动将提取的数据张量放入固定内存中，从而更快将数据传输到GPU。
             **val_dl_kwargs,
         )
         if len(eval_dataloader) == 0:

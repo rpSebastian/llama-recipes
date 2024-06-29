@@ -497,6 +497,7 @@ def get_policies(cfg, rank):
                 print(f"FP16 enabled")
         else:
             print(f"bFloat16 support not present. Using FP32, and not mixed precision")
+    # 包裹transformer中的decoder层
     wrapping_policy = get_llama_wrapper()
     return mixed_precision_policy, wrapping_policy
 

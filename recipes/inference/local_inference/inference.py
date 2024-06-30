@@ -34,7 +34,7 @@ def main(
     length_penalty: int=1, #[optional] Exponential penalty to the length that is used with beam-based generation.
     enable_azure_content_safety: bool=False, # Enable safety check with Azure content safety api
     enable_sensitive_topics: bool=False, # Enable check for sensitive topics using AuditNLG APIs
-    enable_salesforce_content_safety: bool=True, # Enable safety check with Salesforce safety flan t5
+    enable_salesforce_content_safety: bool=False, # Enable safety check with Salesforce safety flan t5
     enable_llamaguard_content_safety: bool=False,
     max_padding_length: int=None, # the max padding length to be used with tokenizer padding the prompts.
     use_fast_kernels: bool = False, # Enable using SDPA from PyTroch Accelerated Transformers, make use Flash Attention and Xformer memory-efficient kernels

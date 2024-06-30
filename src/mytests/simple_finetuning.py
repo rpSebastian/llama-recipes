@@ -12,6 +12,7 @@ from llama_recipes.data.concatenator import ConcatDataset
 from torch.utils.data import DataLoader
 from transformers import default_data_collator
 from torch.utils.data import DistributedSampler
+from llama_recipes.utils.memory_utils import MemoryTrace
 import torch.optim as optim
 import time
 
@@ -26,16 +27,18 @@ def main():
 
 def train():
     for epoch in range(1):
-        model.train()
-        for step, batch in enumerate(dataloader):
-            for key in batch:
-                batch[key] = batch[key].to(local_rank)
-            loss = model(**batch).loss
-            optimizer.zero_grad()
-            loss.backward()
-            model.clip_grad_norm_(1)
-            optimizer.step()
-            print(epoch, step, loss.detach().float())
+        with MemoryTrace() as memtrace:  # track the memory usage
+            model.train()
+            for step, batch in enumerate(dataloader):
+                for key in batch:
+                    batch[key] = batch[key].to(local_rank)
+                loss = model(**batch).loss
+                optimizer.zero_grad()
+                loss.backward()
+                model.clip_grad_norm_(1)
+                optimizer.step()
+                print(epoch, step, loss.detach().float())
+            memtrace.print_stats()
 
 def setup_dist():
     dist.init_process_group("nccl")
@@ -96,7 +99,7 @@ def setup_dataset():
         dataset,
         num_workers=1,
         pin_memory=True,
-        batch_size=1,
+        batch_size=2,
         collate_fn=default_data_collator,
         drop_last=True,
         sampler=sampler

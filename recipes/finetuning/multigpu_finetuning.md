@@ -88,7 +88,7 @@ torchrun --nnodes 1 --nproc_per_node 4  finetuning.py --enable_fsdp  --model_nam
 
 # samsum_dataset
 
-torchrun --nnodes 1 --nproc_per_node 8 ./recipes/finetuning/finetuning.py --enable_fsdp --model_name /data1/xuhang/hf_hub/Meta-Llama-3-8B-hf --use_peft --peft_method lora --dataset samsum_dataset --save_model --dist_checkpoint_root_folder model_checkpoints --dist_checkpoint_folder fine-tuned --pure_bf16 --output_dir /home/xuhang/LLM/models/llama-3-8B-peft --batch_size_training 1  --max_train_step 10 --max_eval_step 10  --use_profiler  --profiler_dir /home/xuhang/LLM/models/llama-3-8B-peft  --save_metrics
+torchrun --nnodes 1 --nproc_per_node 8 ./recipes/finetuning/finetuning.py --enable_fsdp --model_name /data1/xuhang/hf_hub/Meta-Llama-3-8B-hf --use_peft --peft_method lora --dataset samsum_dataset --save_model --dist_checkpoint_root_folder model_checkpoints --dist_checkpoint_folder fine-tuned --pure_bf16 --output_dir /home/xuhang/LLM/models/llama-3-8B-peft --batch_size_training 1  --use_profiler  --profiler_dir /home/xuhang/LLM/models/llama-3-8B-peft  --save_metrics  --use_wandb  --num_epochs 10
 ```
 
 

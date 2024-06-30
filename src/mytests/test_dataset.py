@@ -19,6 +19,7 @@ for sample in dataset:
 print(total)
 
 dataset = ConcatDataset(dataset, chunk_size=2048)
+print(len(dataset))
 total = 0
 for sample in dataset:
     total += len(sample["input_ids"])

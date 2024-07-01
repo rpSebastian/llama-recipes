@@ -57,7 +57,7 @@ python -m finetuning.py  --use_peft --peft_method lora --quantization  --dataset
 
 # samsum_dataset
 
-python -m finetuning.py  --use_peft --peft_method lora --quantization  --dataset samsum_dataset --model_name /path_of_model_folder/8B --output_dir Path/to/save/PEFT/model
+python -m finetuning.py  --use_peft --peft_method lora --quantization  --dataset samsum_dataset --model_name /data1/xuhang/hf_hub/Meta-Llama-3-8B-hf --output_dir /home/xuhang/LLM/models/llama-3-8B-peft
 
 ```
 

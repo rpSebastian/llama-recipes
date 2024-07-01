@@ -20,6 +20,8 @@ cat <test_prompt_file> | python inference.py --model_name <training_config.outpu
 cat <test_prompt_file> | python inference.py --model_name <training_config.model_name> --peft_model <training_config.output_dir> --use_auditnlg
 # prompt as parameter
 python inference.py --model_name <training_config.output_dir> --prompt_file <test_prompt_file> --use_auditnlg
+
+python inference.py --model_name /data1/xuhang/hf_hub/Meta-Llama-3-8B-hf --prompt_file samsum_prompt.txt --use_auditnlg
  ```
 The  folder contains test prompts for summarization use-case:
 ```

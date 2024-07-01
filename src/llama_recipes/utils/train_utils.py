@@ -86,15 +86,17 @@ def train(model, train_dataloader,eval_dataloader, tokenizer, optimizer, lr_sche
     Returns: results dictionary containing average training and validation perplexity and loss
     """
     # Create a gradient scaler for fp16
+    # 半精度训练下的梯度缩放器
     if train_config.use_fp16 and train_config.enable_fsdp:
+        # 使用启用了fsdp，那么使用切片的梯度缩放器
         scaler = ShardedGradScaler()
     elif train_config.use_fp16 and not train_config.enable_fsdp:
         scaler = torch.cuda.amp.GradScaler()
     if train_config.enable_fsdp:
+        # 分布式进程总数量
         world_size = int(os.environ["WORLD_SIZE"])
 
-
-
+    # 半精度训练下的自动转换精度
     autocast = torch.cuda.amp.autocast if train_config.use_fp16 else nullcontext
     train_prep = []
     train_loss = []
@@ -125,6 +127,7 @@ def train(model, train_dataloader,eval_dataloader, tokenizer, optimizer, lr_sche
         with MemoryTrace() as memtrace:  # track the memory usage
             model.train()
             total_loss = 0.0
+            # 一个epoch里面需要训练的总步数
             total_length = len(train_dataloader)//gradient_accumulation_steps
             pbar = tqdm(colour="blue", desc=f"Training Epoch: {epoch+1}", total=total_length, dynamic_ncols=True)
             with profile(train_config,local_rank) as profile_context:
@@ -136,6 +139,7 @@ def train(model, train_dataloader,eval_dataloader, tokenizer, optimizer, lr_sche
                         if not train_config.enable_fsdp or local_rank==0:
                             print("max training steps reached, stopping training, total train steps finished: ", total_train_steps-1)
                         break
+                    # 将数据移动到GPU
                     for key in batch.keys():
                         if train_config.enable_fsdp:
                             if is_xpu_available():
@@ -148,36 +152,50 @@ def train(model, train_dataloader,eval_dataloader, tokenizer, optimizer, lr_sche
                                 batch[key] = batch[key].to('xpu:0')
                             else:
                                 batch[key] = batch[key].to('cuda:0')
+                    # 调用模型计算损失，支持自动转换半精度
                     with autocast():
                         loss = model(**batch).loss
-                    loss = loss / gradient_accumulation_steps
+                    # 在梯度累积下，需要除以梯度累积步数，相当于batch size变大了
+                    loss = loss / gradient_accumulation_steps 
                     if train_config.save_metrics:
+                        # 保存每步的训练损失
                         train_step_loss.append(loss.detach().float().item())
+                        # 保存困惑度，交叉熵损失的指数
                         train_step_perplexity.append(float(torch.exp(loss.detach().float())))
                     total_loss += loss.detach().float()
                     if train_config.use_fp16:
                         # if fp16 is enabled, use gradient scaler to handle gradient update
+                        # 如果使用了半精度训练，将loss放大若干倍数，防止精度过小无法表示，然后进行反向传播
                         scaler.scale(loss).backward()
                         if (step + 1) % gradient_accumulation_steps == 0 or step == len(train_dataloader) - 1:
                             if train_config.gradient_clipping and train_config.gradient_clipping_threshold > 0.0:
+                                # 梯度裁剪前先将优化器中保存的梯度缩小为原来的倍数
                                 scaler.unscale_(optimizer)
+                                # 裁剪梯度
                                 if train_config.enable_fsdp:
                                     model.clip_grad_norm_(train_config.gradient_clipping_threshold)
                                 else:
                                     torch.nn.utils.clip_grad_norm_(model.parameters(), train_config.gradient_clipping_threshold)
+                            # 更新优化器
                             scaler.step(optimizer)
+                            # 调整缩放器的缩放因子
                             scaler.update()
                             optimizer.zero_grad()
                             pbar.update(1)
                     else:
                         # regular backpropagation when fp16 is not used
+                        # 反向传播计算梯度
                         loss.backward()
+                        # 如果到达了梯度累积步数，或者为本次epoch的最后一批数据（好像会导致batch不足，loss计算错误）
                         if (step + 1) % gradient_accumulation_steps == 0 or step == len(train_dataloader) - 1:
+                            # 基于范数大小裁剪梯度
                             if train_config.gradient_clipping and train_config.gradient_clipping_threshold > 0.0:
+                                # 如果使用fsdp，需要首先all_gather梯度，然后再clip
                                 if train_config.enable_fsdp:
                                     model.clip_grad_norm_(train_config.gradient_clipping_threshold)
                                 else:
                                     torch.nn.utils.clip_grad_norm_(model.parameters(), train_config.gradient_clipping_threshold)
+                            # 更新优化器
                             optimizer.step()
                             optimizer.zero_grad()
                             pbar.update(1)
@@ -243,6 +261,7 @@ def train(model, train_dataloader,eval_dataloader, tokenizer, optimizer, lr_sche
                         print(f"PEFT modules are saved in {train_config.output_dir} directory")
 
                 else:
+                    # 如果不是使用微调的话，支持保存模型状态或者优化器状态
                     if not train_config.use_peft and fsdp_config.checkpoint_type == StateDictType.FULL_STATE_DICT:
 
                         save_model_checkpoint(
@@ -307,7 +326,7 @@ def train(model, train_dataloader,eval_dataloader, tokenizer, optimizer, lr_sche
     if train_config.flop_counter:
         results["model_tflops"]= TFlops
     #saving the training params including fsdp setting for reference.
-    if train_config.enable_fsdp and not train_config.use_peft and rank==0:
+    if train_config.enable_fsdp and rank==0:
         save_train_params(train_config, fsdp_config, rank)
 
     return results
@@ -497,6 +516,7 @@ def get_policies(cfg, rank):
                 print(f"FP16 enabled")
         else:
             print(f"bFloat16 support not present. Using FP32, and not mixed precision")
+    # 包裹transformer中的decoder层
     wrapping_policy = get_llama_wrapper()
     return mixed_precision_policy, wrapping_policy
 

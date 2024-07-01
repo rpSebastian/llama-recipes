@@ -8,8 +8,7 @@ import datasets
 
 
 def get_preprocessed_samsum(dataset_config, tokenizer, split):
-    dataset = datasets.load_dataset("samsum", split=split)
-
+    dataset = datasets.load_dataset("/data1/xuhang/hf_hub/samsum_reformat", split=split)
     prompt = (
         f"Summarize this dialog:\n{{dialog}}\n---\nSummary:\n"
     )

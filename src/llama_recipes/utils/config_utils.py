@@ -80,6 +80,7 @@ def get_dataloader_kwargs(train_config, dataset, tokenizer, mode):
         batch_size = train_config.batch_size_training if mode=="train" else train_config.val_batch_size
         if train_config.batching_strategy == "padding":
             if train_config.enable_fsdp:
+                # 分布式采样，将总数据切分为world_size份，每个进程采样其中一份
                 kwargs["batch_sampler"] = DistributedLengthBasedBatchSampler(
                     dataset,
                     batch_size=batch_size,
@@ -88,9 +89,12 @@ def get_dataloader_kwargs(train_config, dataset, tokenizer, mode):
                     shuffle=mode=="train",
                 )
             else:
+                # 如果采用padding，采样长度仅可能相似的数据
                 kwargs["batch_sampler"] = LengthBasedBatchSampler(dataset, batch_size, drop_last=True, shuffle=mode=="train")
+            # 进行padding补全
             kwargs["collate_fn"] = DataCollatorForSeq2Seq(tokenizer)
         elif train_config.batching_strategy == "packing":
+            # 如果采用packing，不需要进行补全
             if train_config.enable_fsdp:
                 kwargs["sampler"] = DistributedSampler(
                 dataset,
